@@ -5,107 +5,149 @@ async fetch(request, env) {
 const url = new URL(request.url);
 
 
-// PLAYLIST HLS
-if (url.pathname === "/" || url.pathname === "/index.m3u8") {
+// =====================
+// PLAYLIST
+// =====================
 
-  let lista = await env.SEGMENTOS.get("playlist", "json");
-
-  if (!lista) {
-    return new Response(
-      "Sin segmentos todavía",
-      {status:404}
-    );
-  }
+if(url.pathname === "/index.m3u8") {
 
 
-  let m3u8 = `#EXTM3U
+let data = await env.SEGMENTOS.get(
+"playlist",
+"json"
+);
+
+
+if(!data){
+
+return new Response(
+"Sin segmentos",
+{status:404}
+);
+
+}
+
+
+let m3u8 =
+`#EXTM3U
 #EXT-X-VERSION:3
-#EXT-X-TARGETDURATION:25
+#EXT-X-TARGETDURATION:6
 #EXT-X-MEDIA-SEQUENCE:0
 `;
 
 
-  for (let seg of lista.segmentos) {
+for(let seg of data.segmentos.slice(-10)){
 
-    m3u8 += `#EXTINF:25,
-segmento/${seg}
+
+m3u8 +=
+`#EXTINF:6,
+${url.origin}/segmento/${seg}
 `;
 
-  }
+}
 
 
-  return new Response(
-    m3u8,
-    {
-      headers:{
-        "content-type":"application/vnd.apple.mpegurl",
-        "cache-control":"no-store"
-      }
-    }
-  );
+return new Response(
+m3u8,
+{
+headers:{
+"content-type":
+"application/vnd.apple.mpegurl",
+"cache-control":
+"no-store"
+}
+}
+);
 
 }
 
 
 
-// SEGMENTOS TS DESDE TELEGRAM
-if (url.pathname.startsWith("/segmento/")) {
+// =====================
+// SEGMENTOS TELEGRAM
+// =====================
+
+if(url.pathname.startsWith("/segmento/")){
 
 
- const nombre = url.pathname.split("/").pop();
-
-
- const dato = await env.SEGMENTOS.get(nombre,"json");
-
-
- if(!dato){
-
-   return new Response(
-    "Segmento no encontrado",
-    {status:404}
-   );
-
- }
+let nombre =
+url.pathname.split("/").pop();
 
 
 
- // obtener ruta real de Telegram
-
- const info = await fetch(
- `https://api.telegram.org/bot${env.TELEGRAM_TOKEN}/getFile?file_id=${dato.file_id}`
- );
-
-
- const json = await info.json();
-
-
- const file_path = json.result.file_path;
+let lista =
+await env.SEGMENTOS.get(
+"segmentos",
+"json"
+);
 
 
 
- const archivo = await fetch(
- `https://api.telegram.org/file/bot${env.TELEGRAM_TOKEN}/${file_path}`
- );
+if(!lista[nombre]){
 
-
- return new Response(
-   archivo.body,
-   {
-    headers:{
-     "content-type":"video/mp2t",
-     "cache-control":"no-store"
-    }
-   }
- );
-
+return new Response(
+"No existe",
+{status:404}
+);
 
 }
 
 
 
-return new Response("Fenix HLS Worker OK");
+let file_id =
+lista[nombre].file_id;
+
+
+
+let tg =
+await fetch(
+`https://api.telegram.org/bot${env.TOKEN}/getFile?file_id=${file_id}`
+);
+
+
+
+let info =
+await tg.json();
+
+
+
+if(!info.ok){
+
+return new Response(
+"Telegram error",
+{status:500}
+);
+
+}
+
+
+
+let archivo =
+await fetch(
+`https://api.telegram.org/file/bot${env.TOKEN}/${info.result.file_path}`
+);
+
+
+
+return new Response(
+archivo.body,
+{
+headers:{
+"content-type":"video/mp2t",
+"cache-control":"no-store"
+}
+}
+);
+
 
 
 }
 
-};
+
+return new Response(
+"Fenix HLS Worker"
+);
+
+}
+
+}
