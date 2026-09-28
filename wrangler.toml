@@ -1,3 +1,7 @@
-name = "fenix-hls-worker"
+name = "fenix-hls-workers"
 main = "index.js"
 compatibility_date = "2026-09-28"
+
+[[kv_namespaces]]
+binding = "SEGMENTOS"
+id = "49d39786f64f4b6584116acec0f903a4"
