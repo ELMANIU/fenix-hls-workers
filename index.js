@@ -1,117 +1,55 @@
 export default {
-  async fetch(request, env) {
+async fetch(request, env) {
 
-    const url = new URL(request.url);
+const url = new URL(request.url);
 
-    // Playlist HLS
-    if (url.pathname === "/" || url.pathname === "/index.m3u8") {
+if(url.pathname.startsWith("/segment/")){
 
-      const data = await env.SEGMENTOS.get("playlist", "json");
+const nombre = url.pathname.split("/").pop();
 
-      if (!data || !data.segmentos) {
-        return new Response(
-          "Sin playlist",
-          {status:404}
-        );
-      }
+const registro = await env.SEGMENTOS.get("telegram_segments.json");
 
-      let m3u8 = 
-`#EXTM3U
-#EXT-X-VERSION:3
-#EXT-X-TARGETDURATION:6
-#EXT-X-MEDIA-SEQUENCE:0
-`;
+if(!registro){
+return new Response("No existe registro",{status:404});
+}
 
-      for (const seg of data.segmentos.slice(-10)) {
+const data = await registro.json();
 
-        m3u8 +=
-`#EXTINF:6,
-/segmento/${seg}
-`;
+const file_id = data[nombre];
 
-      }
+if(!file_id){
+return new Response("Segmento no encontrado "+nombre,{status:404});
+}
 
 
-      return new Response(m3u8,{
-        headers:{
-          "content-type":"application/vnd.apple.mpegurl",
-          "cache-control":"no-cache",
-          "Access-Control-Allow-Origin":"*"
-        }
-      });
-    }
+// Telegram API
+
+const info = await fetch(
+`https://api.telegram.org/bot${env.BOT_TOKEN}/getFile?file_id=${file_id}`
+);
+
+const json = await info.json();
+
+const ruta=json.result.file_path;
 
 
-    // Segmentos TS
-    if (url.pathname.startsWith("/segmento/")) {
-
-      const nombre =
-        url.pathname.split("/").pop();
+const video = await fetch(
+`https://api.telegram.org/file/bot${env.BOT_TOKEN}/${ruta}`
+);
 
 
-      const registro =
-        await env.SEGMENTOS.get(nombre,"json");
+return new Response(video.body,{
+headers:{
+"Content-Type":"video/mp2t",
+"Cache-Control":"public,max-age=86400"
+}
+});
 
 
-      if (!registro || !registro.file_id){
-
-        return new Response(
-          "Segmento no encontrado",
-          {status:404}
-        );
-
-      }
+}
 
 
-      const token =
-        env.TELEGRAM_TOKEN;
+return new Response("Fenix HLS Worker OK");
 
-
-      const info =
-        await fetch(
-`https://api.telegram.org/bot${token}/getFile?file_id=${registro.file_id}`
-        );
-
-
-      const json =
-        await info.json();
-
-
-      if(!json.ok){
-
-        return new Response(
-          "Telegram error",
-          {status:500}
-        );
-
-      }
-
-
-      const archivo =
-        json.result.file_path;
-
-
-      const ts =
-        await fetch(
-`https://api.telegram.org/file/bot${token}/${archivo}`
-        );
-
-
-      return new Response(
-        ts.body,
-        {
-          headers:{
-            "content-type":"video/mp2t",
-            "cache-control":"no-store",
-            "Access-Control-Allow-Origin":"*"
-          }
-        }
-      );
-
-    }
-
-
-    return new Response("OK");
-
-  }
+}
 }
